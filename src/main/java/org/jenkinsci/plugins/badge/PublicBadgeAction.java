@@ -27,6 +27,9 @@ import hudson.Extension;
 import hudson.PluginWrapper;
 import static hudson.model.Item.PERMISSIONS;
 import static hudson.model.Item.READ;
+
+import hudson.model.BallColor;
+import hudson.model.HealthReport;
 import hudson.model.Job;
 import hudson.model.UnprotectedRootAction;
 import hudson.plugins.clover.CloverBuildAction;
@@ -135,18 +138,16 @@ public class PublicBadgeAction implements UnprotectedRootAction {
                 JacocoBuildAction jacocoAction = project.getLastSuccessfulBuild().getAction(JacocoBuildAction.class);
                 if (jacocoAction != null) {
                     if (jacocoAction.getInstructionCoverage() != null){
-                    codeCoverage = jacocoAction.getInstructionCoverage().getPercentage();
+						codeCoverage = jacocoAction.getInstructionCoverage().getPercentage();
                     }
                 }
             }
             PluginWrapper coberturaInstalled = getInstance().pluginManager.getPlugin("cobertura");
             // Checks for Cobertura
             if (coberturaInstalled != null && coberturaInstalled.isActive()) {
-                CoberturaBuildAction coverageAction = project.getLastSuccessfulBuild().getAction(CoberturaBuildAction.class);
-                if (coverageAction != null) {
-                    if (coverageAction.getBuildHealth() != null){
-                        codeCoverage = coverageAction.getResults().get(CoverageMetric.LINE).getPercentage();
-                    }
+                CoberturaBuildAction coberturaAction = project.getLastSuccessfulBuild().getAction(CoberturaBuildAction.class);
+                if (coberturaAction != null) {
+                	codeCoverage = coberturaAction.getResults().get(CoverageMetric.LINE).getPercentage();
                 }
             }
             PluginWrapper cloverInstalled = getInstance().pluginManager.getPlugin("clover");
@@ -154,9 +155,7 @@ public class PublicBadgeAction implements UnprotectedRootAction {
             if (cloverInstalled != null && cloverInstalled.isActive()) {
                 CloverBuildAction cloverAction = project.getLastSuccessfulBuild().getAction(CloverBuildAction.class);
                 if (cloverAction != null){
-                    if (cloverAction.getBuildHealth() != null){
-                        codeCoverage = cloverAction.getElementCoverage().getPercentage();
-                    }
+                    codeCoverage = cloverAction.getElementCoverage().getPercentage();
                 }
             }
         }
@@ -199,7 +198,13 @@ public class PublicBadgeAction implements UnprotectedRootAction {
      */
     public HttpResponse doBuildIcon(StaplerRequest req, StaplerResponse rsp, @QueryParameter String job) {
         Job<?, ?> project = getProject(job);
-        return iconResolver.getImage(project.getIconColor());
+        BallColor lastBuildColor;
+        if(project.getLastCompletedBuild() != null) {
+        	lastBuildColor = project.getLastCompletedBuild().getIconColor();
+        } else {
+        	lastBuildColor = BallColor.NOTBUILT;
+        }
+        return iconResolver.getImage(project.getIconColor(), lastBuildColor);
     }
     
     /**
@@ -217,15 +222,29 @@ public class PublicBadgeAction implements UnprotectedRootAction {
             buildDescription = project.getLastSuccessfulBuild().getDescription();
         }*/
         
-        /*if (project.getLastBuild() != null) {
+        if (project.getLastBuild() != null) {
             buildDescription = project.getLastBuild().getDescription();
-        }*/
+        }
         
-        if (project.getLastCompletedBuild() != null) {
+        if (buildDescription == null && project.getLastCompletedBuild() != null) {
             buildDescription = project.getLastCompletedBuild().getDescription();
         }
         
         return iconResolver.getBuildDescriptionImage(buildDescription);
+    }
+    
+    /**
+     * Serves the Weather badge image.
+     * @param req
+     * @param rsp
+     * @param job
+     * @return
+     */
+    public HttpResponse doWeatherIcon(StaplerRequest req, StaplerResponse rsp, @QueryParameter String job) {
+        Job<?, ?> project = getProject(job);
+        HealthReport healthReport = project.getBuildHealth();
+        
+        return iconResolver.getWeatherImage(healthReport);
     }
     
     /** 

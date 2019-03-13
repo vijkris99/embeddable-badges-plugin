@@ -24,6 +24,8 @@
 package org.jenkinsci.plugins.badge;
 
 import hudson.model.BallColor;
+import hudson.model.HealthReport;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
@@ -81,11 +83,15 @@ public class ImageResolver {
         styles = new HashMap<String, StatusImage[]>();
         // shields.io "flat" style (new default from Feb 1 2015)
         StatusImage[] flatImages;
-        flatImages = new StatusImage[]{
+        flatImages = new StatusImage[] {
             new StatusImage("build-failing-red-flat.svg"),
             new StatusImage("build-unstable-yellow-flat.svg"),
             new StatusImage("build-passing-brightgreen-flat.svg"),
-            new StatusImage("build-running-blue-flat.svg"),
+            new StatusImage("build-running-blue-red-flat.svg"),
+            new StatusImage("build-running-blue-yellow-flat.svg"),
+            new StatusImage("build-running-blue-brightgreen-flat.svg"),
+            new StatusImage("build-running-blue-lightgrey-aborted-flat.svg"),
+            new StatusImage("build-running-blue-lightgrey-unknown-flat.svg"),
             new StatusImage("build-aborted-lightgrey-flat.svg"),
             new StatusImage("build-unknown-lightgrey-flat.svg")
         };
@@ -274,11 +280,11 @@ public class ImageResolver {
      * @param color
      * @return
      */
-    public StatusImage getImage(BallColor color) {
+    public StatusImage getImage(BallColor color, BallColor lastBuildColor) {
         StatusImage[] images = styles.get("default");
 
-        if (color.isAnimated()) {
-            return images[3];
+        if (color.isAnimated()) {	// Running
+        	return getRunningBuildImage(lastBuildColor);
         }
 
         switch (color) {
@@ -289,9 +295,26 @@ public class ImageResolver {
             case BLUE:
                 return images[2];
             case ABORTED:
-                return images[4];
+                return images[8];
             default:
+                return images[9];
+        }
+    }
+    
+    private StatusImage getRunningBuildImage(BallColor lastBuildColor) {
+    	StatusImage[] images = styles.get("default");
+
+        switch (lastBuildColor) {
+            case RED:
+                return images[3];
+            case YELLOW:
+                return images[4];
+            case BLUE:
                 return images[5];
+            case ABORTED:
+                return images[6];
+            default:
+                return images[7];
         }
     }
     
@@ -331,7 +354,7 @@ public class ImageResolver {
     }
     
     public StatusImage getBuildDescriptionImage(String buildDescription) {
-         // TODO don't read file everytime
+        // TODO don't read file everytime
         // TODO store this as a static variable in memory with the constructor
         URL imageUrl = null;
         try {
@@ -361,5 +384,54 @@ public class ImageResolver {
             e.printStackTrace();
         }
         return null;
+    }
+    
+    public StatusImage getWeatherImage(HealthReport healthReport) {
+    	// TODO don't read file everytime
+        // TODO store this as a static variable in memory with the constructor
+        URL imageUrl = null;
+        String imageName;
+        
+        int score = healthReport.getScore();
+        if (score <= 20) {
+            imageName = "weather/health-00to19.svg";
+        } else if (score <= 40) {
+        	imageName = "weather/health-20to39.svg";
+        } else if (score <= 60) {
+        	imageName = "weather/health-40to59.svg";
+        } else if (score <= 80) {
+        	imageName = "weather/health-60to79.svg";
+        } else {
+        	imageName = "weather/health-80plus.svg";
+        }
+        
+        try {
+            imageUrl = new URL(
+                    getInstance().pluginManager.getPlugin("embeddable-badges").baseResourceURL,
+                    imageName);
+        } catch (MalformedURLException e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+        }
+    	
+        StringBuilder sb = null;
+        try {
+            sb = new StringBuilder(IOUtils.toString(imageUrl.openStream()));
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+
+        InputStream is = toInputStream(sb.toString());
+        String etag = thisPluginCurrentVersion + "-" + imageName;
+
+        try {
+            return new StatusImage(etag, is);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        
+    	return null;
     }
 }
